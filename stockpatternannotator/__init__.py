@@ -10,8 +10,9 @@ from .polygon_client import PolygonClient, create_polygon_client
 from .database import DatabaseManager, create_database_manager
 from .pipeline import DataPipeline
 from .config import Config, load_config, setup_environment
+from .validation import PatternValidator
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "PatternAnnotator",
     "PatternConfig",
@@ -24,5 +25,6 @@ __all__ = [
     "DataPipeline",
     "Config",
     "load_config",
-    "setup_environment"
+    "setup_environment",
+    "PatternValidator"
 ]

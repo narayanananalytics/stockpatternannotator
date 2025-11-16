@@ -12,6 +12,7 @@ from .database import DatabaseManager, create_database_manager
 from .annotator import PatternAnnotator
 from .patterns import PatternConfig
 from .pivots import PivotDetector
+from .validation import PatternValidator
 
 
 class DataPipeline:
@@ -416,6 +417,146 @@ class DataPipeline:
                 annotations.to_json(ann_path, orient='records', date_format='iso')
 
             print(f"Exported annotations to: {ann_path}")
+
+    def validate_patterns(
+        self,
+        symbol: Optional[str] = None,
+        timeframe: Optional[str] = None,
+        forecast_horizons: List[int] = [1, 3, 5, 10],
+        price_column: str = 'close',
+        calculate_probabilities: bool = True,
+        save_to_db: bool = False
+    ) -> dict:
+        """
+        Validate patterns and calculate probability of bullish/bearish outcomes.
+
+        Args:
+            symbol: Filter by symbol (None for all)
+            timeframe: Filter by timeframe (None for all)
+            forecast_horizons: List of candle counts to look forward
+            price_column: Price column to analyze
+            calculate_probabilities: Whether to calculate probabilities
+            save_to_db: Whether to save validation results to database (future feature)
+
+        Returns:
+            Dictionary with validation results and probabilities
+        """
+        print("=" * 70)
+        print("PATTERN VALIDATION AND PROBABILITY ANALYSIS")
+        print("=" * 70)
+        print()
+
+        # Load OHLC data
+        print("Loading OHLC data...")
+        ohlc_data = self.db_manager.load_ohlc_data(
+            symbol=symbol,
+            timeframe=timeframe
+        )
+
+        if ohlc_data.empty:
+            print("No OHLC data found")
+            return {
+                'validation_results': pd.DataFrame(),
+                'probabilities': pd.DataFrame(),
+                'summary': {}
+            }
+
+        print(f"Loaded {len(ohlc_data)} OHLC records")
+
+        # Load annotations
+        print("Loading annotations...")
+        annotations = self.db_manager.load_annotations(
+            symbol=symbol,
+            timeframe=timeframe
+        )
+
+        if annotations.empty:
+            print("No annotations found")
+            return {
+                'validation_results': pd.DataFrame(),
+                'probabilities': pd.DataFrame(),
+                'summary': {}
+            }
+
+        print(f"Loaded {len(annotations)} annotations")
+        print()
+
+        # Create validator
+        print(f"Validating patterns with forecast horizons: {forecast_horizons}")
+        validator = PatternValidator(
+            forecast_horizons=forecast_horizons,
+            price_change_threshold=0.0,
+            require_minimum_samples=5
+        )
+
+        # Run validation
+        validation_results = validator.validate_patterns(
+            ohlc_data=ohlc_data,
+            annotations=annotations,
+            price_column=price_column
+        )
+
+        print(f"Validated {len(validation_results)} pattern instances")
+        print()
+
+        # Calculate probabilities
+        probabilities = pd.DataFrame()
+        if calculate_probabilities and not validation_results.empty:
+            print("Calculating probabilities...")
+            probabilities = validator.calculate_probabilities()
+            print(f"Calculated probabilities for {len(probabilities)} pattern types")
+            print()
+
+            # Print report
+            report = validator.generate_probability_report(probabilities)
+            print(report)
+
+        # Get summary
+        summary = validator.get_validation_summary()
+
+        return {
+            'validation_results': validation_results,
+            'probabilities': probabilities,
+            'probabilities_by_symbol': validator.calculate_probabilities_by_symbol() if not validation_results.empty else pd.DataFrame(),
+            'summary': summary,
+            'validator': validator
+        }
+
+    def get_pattern_probabilities(
+        self,
+        pattern_name: Optional[str] = None,
+        symbol: Optional[str] = None,
+        forecast_horizons: List[int] = [1, 3, 5, 10]
+    ) -> pd.DataFrame:
+        """
+        Quick method to get probabilities for specific patterns.
+
+        Args:
+            pattern_name: Filter by pattern name (None for all)
+            symbol: Filter by symbol (None for all)
+            forecast_horizons: Forecast horizons to analyze
+
+        Returns:
+            DataFrame with probabilities
+        """
+        # Load data
+        ohlc_data = self.db_manager.load_ohlc_data(symbol=symbol)
+        annotations = self.db_manager.load_annotations(
+            symbol=symbol,
+            pattern_name=pattern_name
+        )
+
+        if ohlc_data.empty or annotations.empty:
+            return pd.DataFrame()
+
+        # Validate and calculate probabilities
+        validator = PatternValidator(forecast_horizons=forecast_horizons)
+        validation_results = validator.validate_patterns(ohlc_data, annotations)
+
+        if validation_results.empty:
+            return pd.DataFrame()
+
+        return validator.calculate_probabilities()
 
     def close(self):
         """Close all connections."""
