@@ -1,9 +1,10 @@
 # Stock Pattern Annotator
 
-A flexible and efficient tool for annotating OHLC (Open, High, Low, Close) candlestick data with common chart patterns and support/resistance levels using vectorbtpro.
+A flexible and efficient tool for annotating OHLC (Open, High, Low, Close) candlestick data with common chart patterns and support/resistance levels using vectorbtpro, with integrated Polygon.io data fetching and database storage.
 
 ## Features
 
+### Core Pattern Detection
 - **Candlestick Pattern Detection**: Detect both single-candle and multi-candle patterns
   - Single-candle: Doji, Hammer, Shooting Star, Inverted Hammer, Spinning Top, etc.
   - Multi-candle: Engulfing, Harami, Morning Star, Evening Star, Three White Soldiers, etc.
@@ -12,12 +13,17 @@ A flexible and efficient tool for annotating OHLC (Open, High, Low, Close) candl
 
 - **Flexible Configuration**: Customize which patterns to detect, similarity thresholds, and window sizes
 
+### Data Integration (NEW in v0.2.0)
+- **Polygon.io Integration**: Fetch real-time and historical market data directly from Polygon.io REST API
+- **Database Storage**: Store OHLC data and annotations in SQLite, PostgreSQL, or MySQL databases
+- **Complete Data Pipeline**: Automated workflow from data fetching → storage → pattern detection
+- **Incremental Updates**: Update existing data with recent market information
+- **Query Interface**: Flexible querying of stored data and annotations
+
+### Performance & Scalability
 - **Multi-Symbol/Timeframe Support**: Process multiple symbols and timeframes in a single run
-
 - **Parallel Processing**: Utilize vectorbtpro's multithreading capabilities for fast processing
-
 - **Separate Annotation Storage**: Keep pattern annotations separate from OHLC data with full metadata linkage
-
 - **Multiple Export Formats**: Export annotations to CSV, Parquet, or JSON
 
 ## Installation
@@ -82,6 +88,71 @@ annotations = annotator.annotate(
 
 # View results
 print(annotations)
+```
+
+### Polygon.io Integration (Complete Pipeline)
+
+```python
+from stockpatternannotator import DataPipeline
+from datetime import datetime, timedelta
+import os
+
+# Set your Polygon.io API key
+os.environ['POLYGON_API_KEY'] = 'your_api_key_here'
+
+# Create pipeline (uses SQLite by default)
+pipeline = DataPipeline()
+
+# Run complete pipeline: fetch → store → annotate
+tickers = ['AAPL', 'GOOGL', 'MSFT']
+to_date = datetime.now()
+from_date = to_date - timedelta(days=30)
+
+annotations = pipeline.run_full_pipeline(
+    tickers=tickers,
+    timespan='day',
+    from_date=from_date,
+    to_date=to_date,
+    detect_patterns=True,
+    detect_pivots=True
+)
+
+# View summary
+pipeline.print_summary()
+
+# Export results
+pipeline.export_data('output', format='csv')
+```
+
+### Database Operations
+
+```python
+from stockpatternannotator import DatabaseManager
+from datetime import datetime, timedelta
+
+# Connect to database
+db = DatabaseManager(database_url='sqlite:///stockpatterns.db')
+
+# Query OHLC data
+data = db.load_ohlc_data(
+    symbol='AAPL',
+    timeframe='1D',
+    start_date=datetime(2024, 1, 1),
+    end_date=datetime.now()
+)
+
+# Query annotations
+annotations = db.load_annotations(
+    symbol='AAPL',
+    pattern_name='DOJI'
+)
+
+# Get summary
+summary = db.get_data_summary()
+print(summary)
+
+# Close connection
+db.close()
 ```
 
 ### Multi-Symbol/Timeframe Processing
@@ -149,6 +220,69 @@ pivot_detector = PivotDetector(
 )
 ```
 
+### Database Configuration
+
+```python
+from stockpatternannotator import DatabaseManager
+
+# SQLite (default, file-based)
+db = DatabaseManager(database_url='sqlite:///stockpatterns.db')
+
+# PostgreSQL
+db = DatabaseManager(database_url='postgresql://user:password@localhost:5432/stockpatterns')
+
+# MySQL
+db = DatabaseManager(database_url='mysql+pymysql://user:password@localhost:3306/stockpatterns')
+```
+
+### Polygon.io Configuration
+
+```python
+from stockpatternannotator import PolygonClient
+import os
+
+# Option 1: Environment variable
+os.environ['POLYGON_API_KEY'] = 'your_api_key_here'
+
+# Option 2: Direct initialization
+client = PolygonClient(api_key='your_api_key_here', rate_limit_delay=0.1)
+
+# Fetch data
+data = client.get_aggregates(
+    ticker='AAPL',
+    timespan='day',
+    from_date='2024-01-01',
+    to_date='2024-12-31',
+    multiplier=1
+)
+```
+
+### Environment Variables
+
+Create a `.env` file in your project root:
+
+```bash
+# Polygon.io API Key
+POLYGON_API_KEY=your_polygon_api_key_here
+
+# Database URL (optional, defaults to SQLite)
+DATABASE_URL=sqlite:///stockpatterns.db
+
+# Rate limiting for Polygon.io (optional)
+POLYGON_RATE_LIMIT=0.1
+```
+
+Then load it in your code:
+
+```python
+from dotenv import load_dotenv
+load_dotenv()
+
+# Now environment variables are available
+from stockpatternannotator import DataPipeline
+pipeline = DataPipeline()  # Automatically uses env vars
+```
+
 ## Annotation Format
 
 Annotations are stored in a DataFrame with the following columns:
@@ -166,14 +300,26 @@ Annotations are stored in a DataFrame with the following columns:
 
 Complete examples are provided in the `examples/` directory:
 
+### Core Pattern Detection Examples
 - **basic_usage.py**: Simple pattern detection with sample data
 - **multi_symbol_example.py**: Processing multiple symbols and timeframes
+
+### Polygon.io Integration Examples (NEW)
+- **polygon_pipeline_example.py**: Complete pipeline with Polygon.io data fetching
+- **database_query_example.py**: Querying and analyzing stored data
+- **update_data_example.py**: Updating existing data and backfilling annotations
 
 Run examples:
 
 ```bash
+# Basic pattern detection
 python examples/basic_usage.py
 python examples/multi_symbol_example.py
+
+# Polygon.io integration (requires API key)
+export POLYGON_API_KEY='your_key_here'
+python examples/polygon_pipeline_example.py
+python examples/database_query_example.py
 ```
 
 ## Supported Patterns
@@ -216,6 +362,45 @@ Main class for pattern annotation.
 - `annotate_multiple(data, symbol_col, timeframe_col, ...)`: Annotate multiple symbols/timeframes
 - `filter_annotations(pattern_names, min_confidence, ...)`: Filter annotations
 - `export_annotations(filepath, format)`: Export to file
+
+### DataPipeline (NEW)
+
+Complete data pipeline for fetching, storing, and annotating.
+
+**Methods:**
+- `fetch_and_store(tickers, timespan, from_date, to_date)`: Fetch from Polygon.io and store
+- `annotate_from_database(symbol, timeframe, ...)`: Load from DB and annotate
+- `run_full_pipeline(tickers, timespan, from_date, to_date)`: Complete fetch→store→annotate workflow
+- `get_summary()`: Get database statistics
+- `update_existing_data(symbols, days_back)`: Update with recent data
+- `backfill_annotations(symbol, timeframe)`: Regenerate annotations
+- `export_data(output_dir, format)`: Export data and annotations
+
+### PolygonClient (NEW)
+
+Client for Polygon.io REST API.
+
+**Methods:**
+- `get_aggregates(ticker, timespan, from_date, to_date)`: Get OHLC data for ticker
+- `get_multiple_tickers(tickers, timespan, from_date, to_date)`: Get data for multiple tickers
+- `get_ticker_details(ticker)`: Get ticker information
+- `get_previous_close(ticker)`: Get previous day's close
+- `search_tickers(query)`: Search for tickers
+
+### DatabaseManager (NEW)
+
+Database operations for OHLC data and annotations.
+
+**Methods:**
+- `save_ohlc_data(data, if_exists)`: Save OHLC data
+- `save_annotations(annotations, if_exists)`: Save annotations
+- `load_ohlc_data(symbol, timeframe, start_date, end_date)`: Load OHLC data
+- `load_annotations(symbol, timeframe, pattern_name)`: Load annotations
+- `get_available_symbols()`: Get list of symbols
+- `get_data_summary()`: Get data summary statistics
+- `get_annotation_summary()`: Get annotation statistics
+- `delete_ohlc_data(symbol, timeframe)`: Delete OHLC data
+- `delete_annotations(symbol, timeframe)`: Delete annotations
 
 ### PatternConfig
 
