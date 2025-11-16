@@ -13,12 +13,20 @@ A flexible and efficient tool for annotating OHLC (Open, High, Low, Close) candl
 
 - **Flexible Configuration**: Customize which patterns to detect, similarity thresholds, and window sizes
 
-### Data Integration (NEW in v0.2.0)
+### Data Integration (v0.2.0)
 - **Polygon.io Integration**: Fetch real-time and historical market data directly from Polygon.io REST API
 - **Database Storage**: Store OHLC data and annotations in SQLite, PostgreSQL, or MySQL databases
 - **Complete Data Pipeline**: Automated workflow from data fetching → storage → pattern detection
 - **Incremental Updates**: Update existing data with recent market information
 - **Query Interface**: Flexible querying of stored data and annotations
+
+### Pattern Validation & Probability Analysis (NEW in v0.3.0)
+- **Backtesting**: Validate historical pattern predictions against actual price movements
+- **Probability Calculation**: Calculate bullish/bearish probabilities for each pattern type
+- **Multi-Horizon Analysis**: Analyze pattern effectiveness across different time horizons (1, 3, 5, 10+ candles)
+- **Win Rate Tracking**: Identify which patterns actually predict price movements
+- **Statistical Validation**: Require minimum sample sizes for statistical significance
+- **Performance Reports**: Generate detailed reports showing pattern effectiveness
 
 ### Performance & Scalability
 - **Multi-Symbol/Timeframe Support**: Process multiple symbols and timeframes in a single run
@@ -122,6 +130,43 @@ pipeline.print_summary()
 
 # Export results
 pipeline.export_data('output', format='csv')
+```
+
+### Pattern Validation & Probability Analysis (NEW)
+
+```python
+from stockpatternannotator import DataPipeline
+
+# Create pipeline with existing database
+pipeline = DataPipeline(database_url='sqlite:///stockpatterns.db')
+
+# Validate patterns and calculate probabilities
+results = pipeline.validate_patterns(
+    forecast_horizons=[1, 3, 5, 10, 20],  # Look forward X candles
+    calculate_probabilities=True
+)
+
+# View probabilities
+probabilities = results['probabilities']
+print(probabilities)
+
+# Get best performing patterns
+validator = results['validator']
+best_patterns = validator.get_best_patterns(
+    horizon=5,          # 5-candle forecast
+    min_win_rate=60.0,  # At least 60% win rate
+    min_samples=10      # At least 10 samples
+)
+
+print(best_patterns)
+
+# Example output:
+# Pattern: DOJI
+#   Horizon  Samples  Bullish %  Bearish %  Avg Change %  Win Rate %
+#   1        45       55.6%      44.4%      +0.23%        55.6%
+#   3        45       48.9%      51.1%      -0.15%        51.1%
+#   5        45       62.2%      37.8%      +0.87%        62.2%  ★
+#   10       42       57.1%      42.9%      +1.24%        57.1%  ★
 ```
 
 ### Database Operations
@@ -304,10 +349,14 @@ Complete examples are provided in the `examples/` directory:
 - **basic_usage.py**: Simple pattern detection with sample data
 - **multi_symbol_example.py**: Processing multiple symbols and timeframes
 
-### Polygon.io Integration Examples (NEW)
+### Polygon.io Integration Examples
 - **polygon_pipeline_example.py**: Complete pipeline with Polygon.io data fetching
 - **database_query_example.py**: Querying and analyzing stored data
 - **update_data_example.py**: Updating existing data and backfilling annotations
+
+### Pattern Validation Examples (NEW in v0.3.0)
+- **pattern_validation_example.py**: Full validation workflow with probability analysis
+- **standalone_validation_example.py**: Using PatternValidator independently
 
 Run examples:
 
@@ -320,6 +369,10 @@ python examples/multi_symbol_example.py
 export POLYGON_API_KEY='your_key_here'
 python examples/polygon_pipeline_example.py
 python examples/database_query_example.py
+
+# Pattern validation (requires existing data in database)
+python examples/pattern_validation_example.py
+python examples/standalone_validation_example.py
 ```
 
 ## Supported Patterns
@@ -363,7 +416,7 @@ Main class for pattern annotation.
 - `filter_annotations(pattern_names, min_confidence, ...)`: Filter annotations
 - `export_annotations(filepath, format)`: Export to file
 
-### DataPipeline (NEW)
+### DataPipeline
 
 Complete data pipeline for fetching, storing, and annotating.
 
@@ -371,10 +424,29 @@ Complete data pipeline for fetching, storing, and annotating.
 - `fetch_and_store(tickers, timespan, from_date, to_date)`: Fetch from Polygon.io and store
 - `annotate_from_database(symbol, timeframe, ...)`: Load from DB and annotate
 - `run_full_pipeline(tickers, timespan, from_date, to_date)`: Complete fetch→store→annotate workflow
+- `validate_patterns(symbol, timeframe, forecast_horizons, ...)`: Validate patterns and calculate probabilities (NEW in v0.3.0)
+- `get_pattern_probabilities(pattern_name, symbol, forecast_horizons)`: Quick probability lookup (NEW in v0.3.0)
 - `get_summary()`: Get database statistics
 - `update_existing_data(symbols, days_back)`: Update with recent data
 - `backfill_annotations(symbol, timeframe)`: Regenerate annotations
 - `export_data(output_dir, format)`: Export data and annotations
+
+### PatternValidator (NEW in v0.3.0)
+
+Validate patterns by analyzing actual outcomes.
+
+**Parameters:**
+- `forecast_horizons`: List of candle counts to look forward (e.g., [1, 3, 5, 10])
+- `price_change_threshold`: Minimum % change to consider directional (default 0.0)
+- `require_minimum_samples`: Minimum samples for probability calculation (default 5)
+
+**Methods:**
+- `validate_patterns(ohlc_data, annotations, price_column)`: Validate all patterns
+- `calculate_probabilities(validation_results)`: Calculate probability statistics
+- `calculate_probabilities_by_symbol(validation_results)`: Probabilities grouped by symbol
+- `generate_probability_report(probabilities, min_win_rate)`: Generate formatted report
+- `get_best_patterns(probabilities, horizon, min_win_rate, min_samples)`: Find best performing patterns
+- `get_validation_summary()`: Get validation statistics
 
 ### PolygonClient (NEW)
 
@@ -472,15 +544,46 @@ MIT License - see LICENSE file for details
 
 For issues, questions, or feature requests, please open an issue on GitHub.
 
+## Use Cases
+
+### Trading Strategy Development
+1. **Backtest pattern effectiveness** - Use validation to identify which patterns actually predict price movements
+2. **Optimize entry/exit timing** - Analyze different forecast horizons to find optimal holding periods
+3. **Filter weak signals** - Eliminate patterns with low win rates or statistical significance
+4. **Symbol-specific analysis** - Identify patterns that work better for specific stocks
+
+### Risk Management
+- **Set confidence thresholds** - Only trade patterns with proven win rates above your threshold
+- **Position sizing** - Scale position size based on pattern probability and historical performance
+- **Stop-loss optimization** - Use average price changes to set appropriate stop-loss levels
+
+### Research & Analysis
+- **Pattern comparison** - Compare effectiveness of different technical patterns
+- **Market regime analysis** - Understand how pattern performance changes over time
+- **Statistical validation** - Ensure patterns have statistical significance before trading
+
+## Performance Considerations
+
+For large datasets:
+- Enable parallel processing: `pattern_config.use_parallel = True`
+- Process data in chunks by symbol/timeframe
+- Use appropriate window sizes for pattern detection
+- Consider using Parquet format for faster I/O
+- Use database indexes for efficient querying
+
 ## Roadmap
 
+- [x] Core pattern detection
+- [x] Polygon.io integration
+- [x] Database storage
+- [x] Pattern validation and probability analysis
 - [ ] Add more pattern types
-- [ ] Implement pattern strength scoring
-- [ ] Add visualization utilities
+- [ ] Pattern strength scoring enhancements
+- [ ] Visualization utilities (charts with pattern overlays)
 - [ ] Support for custom pattern definitions
-- [ ] Integration with popular data providers
-- [ ] Performance optimizations for very large datasets
 - [ ] Real-time pattern detection mode
+- [ ] Machine learning pattern classification
+- [ ] Integration with additional data providers
 
 ## Citation
 
