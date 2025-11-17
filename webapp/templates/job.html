@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Job {{ job.job_id[:8] }} - Stock Pattern Annotator{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Job Header -->
+    <div class="md:flex md:items-center md:justify-between">
+        <div class="min-w-0 flex-1">
+            <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+                {{ job.symbol }} · {{ job.timeframe }}
+            </h2>
+            <div class="mt-1 flex flex-col sm:mt-0 sm:flex-row sm:flex-wrap sm:space-x-6">
+                <div class="mt-2 flex items-center text-sm text-gray-500">
+                    <span class="status-badge status-{{ job.status.value }}">{{ job.status.value }}</span>
+                </div>
+                <div class="mt-2 flex items-center text-sm text-gray-500">
+                    Created {{ job.created_at.strftime('%b %d, %Y at %H:%M UTC') }}
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 flex md:ml-4 md:mt-0">
+            {% if job.status.value == 'completed' %}
+                <a href="/api/jobs/{{ job.job_id }}/download/model"
+                   class="ml-3 inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                    Download Model
+                </a>
+                <a href="/api/jobs/{{ job.job_id }}/download/results"
+                   class="ml-3 inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">
+                    Download CSV
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Progress Bar (if running) -->
+    {% if job.status.value in ['pending', 'running'] %}
+    <div class="mt-8 bg-white shadow sm:rounded-lg"
+         hx-get="/api/jobs/{{ job.job_id }}/status"
+         hx-trigger="every 2s"
+         hx-swap="none">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Training Progress</h3>
+            <div class="mt-4">
+                <div class="relative pt-1">
+                    <div class="flex mb-2 items-center justify-between">
+                        <div>
+                            <span id="progress-label" class="text-xs font-semibold inline-block text-indigo-600">
+                                {{ job.message or 'Initializing...' }}
+                            </span>
+                        </div>
+                        <div class="text-right">
+                            <span id="progress-percent" class="text-xs font-semibold inline-block text-indigo-600">
+                                {{ "%.1f"|format(job.progress) }}%
+                            </span>
+                        </div>
+                    </div>
+                    <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-indigo-200">
+                        <div id="progress-bar" style="width:{{ job.progress }}%"
+                             class="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update progress on HTMX response
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            const xhr = evt.detail.xhr;
+            if (xhr.responseURL.includes('/status')) {
+                const data = JSON.parse(xhr.responseText);
+                document.getElementById('progress-percent').textContent = data.progress.toFixed(1) + '%';
+                document.getElementById('progress-label').textContent = data.message || 'Processing...';
+                document.getElementById('progress-bar').style.width = data.progress + '%';
+
+                // Reload page if completed or failed
+                if (data.status === 'completed' || data.status === 'failed') {
+                    setTimeout(() => location.reload(), 1000);
+                }
+            }
+        });
+    </script>
+    {% endif %}
+
+    <!-- Job Configuration -->
+    <div class="mt-8 bg-white shadow sm:rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Configuration</h3>
+            <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+                <div class="overflow-hidden rounded-lg bg-gray-50 px-4 py-5">
+                    <dt class="truncate text-sm font-medium text-gray-500">Date Range</dt>
+                    <dd class="mt-1 text-sm font-semibold text-gray-900">{{ job.start_date }} to {{ job.end_date }}</dd>
+                </div>
+                <div class="overflow-hidden rounded-lg bg-gray-50 px-4 py-5">
+                    <dt class="truncate text-sm font-medium text-gray-500">Training Timesteps</dt>
+                    <dd class="mt-1 text-sm font-semibold text-gray-900">{{ "{:,}".format(job.total_timesteps) }}</dd>
+                </div>
+                <div class="overflow-hidden rounded-lg bg-gray-50 px-4 py-5">
+                    <dt class="truncate text-sm font-medium text-gray-500">Compute</dt>
+                    <dd class="mt-1 text-sm font-semibold text-gray-900 uppercase">{{ job.compute_type.value }}</dd>
+                </div>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Results (if completed) -->
+    {% if job.status.value == 'completed' and results and results.metrics %}
+    <div class="mt-8">
+        <!-- Key Metrics -->
+        <div class="bg-white shadow sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-5">Performance Metrics</h3>
+                <dl class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="overflow-hidden rounded-lg bg-gradient-to-br from-green-50 to-green-100 px-4 py-5 shadow">
+                        <dt class="truncate text-sm font-medium text-green-900">Total Return</dt>
+                        <dd class="mt-1 text-3xl font-semibold tracking-tight {% if results.metrics.total_return_pct >= 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                            {{ "%+.2f"|format(results.metrics.total_return_pct) }}%
+                        </dd>
+                        <dd class="mt-1 text-xs text-green-700">
+                            ${{ "{:,.2f}".format(results.metrics.final_balance) }} final
+                        </dd>
+                    </div>
+                    <div class="overflow-hidden rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 px-4 py-5 shadow">
+                        <dt class="truncate text-sm font-medium text-blue-900">Win Rate</dt>
+                        <dd class="mt-1 text-3xl font-semibold tracking-tight text-blue-600">
+                            {{ "%.1f"|format(results.metrics.mean_win_rate * 100) }}%
+                        </dd>
+                        <dd class="mt-1 text-xs text-blue-700">
+                            {{ results.metrics.total_trades }} total trades
+                        </dd>
+                    </div>
+                    <div class="overflow-hidden rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 px-4 py-5 shadow">
+                        <dt class="truncate text-sm font-medium text-purple-900">Mean Return</dt>
+                        <dd class="mt-1 text-3xl font-semibold tracking-tight text-purple-600">
+                            {{ "%+.2f"|format(results.metrics.mean_return) }}%
+                        </dd>
+                        <dd class="mt-1 text-xs text-purple-700">
+                            ± {{ "%.2f"|format(results.metrics.std_return) }}% std dev
+                        </dd>
+                    </div>
+                    <div class="overflow-hidden rounded-lg bg-gradient-to-br from-orange-50 to-orange-100 px-4 py-5 shadow">
+                        <dt class="truncate text-sm font-medium text-orange-900">Training Time</dt>
+                        <dd class="mt-1 text-3xl font-semibold tracking-tight text-orange-600">
+                            {{ (results.metrics.training_duration_seconds / 60)|int }}m
+                        </dd>
+                        <dd class="mt-1 text-xs text-orange-700">
+                            {{ "{:,}".format(results.metrics.data_candles) }} candles
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Backtest Results Placeholder -->
+        <div class="mt-8 bg-white shadow sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold leading-6 text-gray-900 mb-4">Backtest Details</h3>
+                <p class="text-sm text-gray-500">
+                    Download the CSV file above for detailed trade-by-trade analysis.
+                    The backtest includes timestamps, prices, actions, positions, P&L, and more.
+                </p>
+                <div class="mt-4">
+                    <a href="/api/jobs/{{ job.job_id }}/download/results"
+                       class="inline-flex items-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500">
+                        <svg class="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download Backtest CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Error Message (if failed) -->
+    {% if job.status.value == 'failed' %}
+    <div class="mt-8 bg-red-50 border-l-4 border-red-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">Job Failed</h3>
+                <p class="mt-2 text-sm text-red-700">{{ job.message or 'Unknown error occurred' }}</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

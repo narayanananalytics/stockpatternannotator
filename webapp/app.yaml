@@ -1,0 +1,37 @@
+# Cloud Run configuration for web service
+
+# Deploy with:
+# gcloud run deploy stockpattern-web \
+#   --source . \
+#   --region us-central1 \
+#   --platform managed \
+#   --allow-unauthenticated
+
+# Service configuration
+service: stockpattern-web
+runtime: python310
+
+# Environment variables
+env_variables:
+  GOOGLE_CLOUD_PROJECT: ${PROJECT_ID}
+  GCS_BUCKET: ${BUCKET_NAME}
+  CLOUD_RUN_REGION: us-central1
+
+# Resources
+resources:
+  cpu: 2
+  memory: 4Gi
+
+# Scaling
+automatic_scaling:
+  min_instances: 0
+  max_instances: 10
+  target_cpu_utilization: 0.7
+  target_concurrent_requests: 80
+
+# Timeout (max 3600s = 1 hour)
+timeout_seconds: 300
+
+# IAP (Identity-Aware Proxy) for authentication
+# Enable in Cloud Console: Security > Identity-Aware Proxy
+# Add authorized users in IAP settings
