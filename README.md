@@ -36,14 +36,42 @@ A flexible and efficient tool for annotating OHLC (Open, High, Low, Close) candl
 
 ## Installation
 
-### Prerequisites
+### Option 1: Docker (Recommended)
+
+Docker provides the easiest way to get started with all dependencies pre-configured, including GPU support.
+
+#### Quick Start with Docker
+
+```bash
+# Clone repository
+git clone https://github.com/narayanananalytics/stockpatternannotator.git
+cd stockpatternannotator
+
+# Setup (creates data directories and .env file)
+make setup
+
+# Edit .env with your API keys and settings
+nano .env
+
+# Run with CPU
+make up-cpu
+
+# OR run with GPU (requires nvidia-docker)
+make up-gpu
+```
+
+See [Docker Installation](#docker-installation) section below for detailed instructions.
+
+### Option 2: Local Installation
+
+#### Prerequisites
 
 - Python 3.8 or higher
 - vectorbtpro (requires license for full functionality)
 - pandas
 - numpy
 
-### Install from source
+#### Install from source
 
 ```bash
 git clone https://github.com/narayanananalytics/stockpatternannotator.git
@@ -51,7 +79,7 @@ cd stockpatternannotator
 pip install -e .
 ```
 
-### Install dependencies
+#### Install dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -570,6 +598,269 @@ For large datasets:
 - Use appropriate window sizes for pattern detection
 - Consider using Parquet format for faster I/O
 - Use database indexes for efficient querying
+
+## Docker Installation
+
+### Prerequisites
+
+- **Docker**: Install from [docker.com](https://docs.docker.com/get-docker/)
+- **Docker Compose**: Usually included with Docker Desktop
+- **nvidia-docker** (for GPU): Install from [nvidia-docker](https://github.com/NVIDIA/nvidia-docker) if using GPU
+
+### Directory Structure
+
+```
+stockpatternannotator/
+├── data/                    # Persistent data (created by make setup)
+│   ├── models/             # Trained RL models
+│   ├── results/            # Backtest results
+│   ├── databases/          # SQLite databases
+│   └── tensorboard/        # TensorBoard logs
+├── Dockerfile              # Multi-stage Docker build
+├── docker-compose.yml      # Service orchestration
+├── docker-entrypoint.sh    # Container entrypoint script
+├── Makefile               # Quick commands
+└── .env                    # Environment variables (create from .env.example)
+```
+
+### Quick Commands (Makefile)
+
+```bash
+# Setup
+make setup              # Create data directories and .env file
+
+# Build
+make build-cpu          # Build CPU image
+make build-gpu          # Build GPU image
+
+# Run
+make up-cpu             # Start CPU services
+make up-gpu             # Start GPU services (requires nvidia-docker)
+make up-dev             # Start with Jupyter notebook
+make up-monitoring      # Start with TensorBoard
+
+# Manage
+make down               # Stop all services
+make logs               # View logs
+make shell-cpu          # Open shell in CPU container
+make shell-gpu          # Open shell in GPU container
+
+# Examples
+make example-rl-cpu     # Run RL trading example (CPU)
+make example-rl-gpu     # Run RL trading example (GPU)
+
+# Utilities
+make gpu-check          # Check GPU availability
+make tensorboard        # Start TensorBoard on port 6006
+make clean              # Remove containers and volumes
+```
+
+### Manual Docker Commands
+
+#### Build Images
+
+```bash
+# CPU version
+docker build -t stockpatternannotator:cpu .
+
+# GPU version (with CUDA 11.8)
+docker build --build-arg CUDA_VERSION=11.8.0 -t stockpatternannotator:gpu .
+```
+
+#### Run with Docker Compose
+
+```bash
+# Start CPU services
+docker-compose --profile cpu up -d
+
+# Start GPU services
+docker-compose --profile gpu up -d
+
+# Start with PostgreSQL database
+docker-compose up -d postgres
+
+# Stop all services
+docker-compose down
+```
+
+#### Run Examples
+
+```bash
+# CPU - RL Trading Example
+docker-compose run --rm app-cpu python examples/rl_trading_example.py
+
+# GPU - RL Trading Example (much faster!)
+docker-compose run --rm app-gpu python examples/rl_trading_example.py
+
+# With custom timesteps
+docker-compose run --rm -e TOTAL_TIMESTEPS=500000 app-gpu python examples/rl_trading_example.py
+```
+
+### Configuration
+
+Edit `.env` file (created from `.env.example`):
+
+```bash
+# Database - Choose SQLite or PostgreSQL
+DATABASE_URL=sqlite:////data/databases/stockpatterns.db
+# DATABASE_URL=postgresql://stockpattern:stockpattern123@postgres:5432/stockpatterns
+
+# Polygon.io API key
+POLYGON_API_KEY=your_api_key_here
+
+# GPU device (0, 1, or 'all')
+NVIDIA_VISIBLE_DEVICES=0
+
+# Training settings
+TOTAL_TIMESTEPS=100000
+```
+
+### Services
+
+The docker-compose setup includes:
+
+1. **app-cpu** / **app-gpu**: Main application container
+   - Runs pattern detection and RL training
+   - CPU or GPU optimized builds
+   - Persistent data in `/data` volume
+
+2. **postgres**: PostgreSQL database (optional)
+   - For production data storage
+   - Alternative to SQLite
+   - Persistent data in `postgres_data` volume
+
+3. **tensorboard**: TensorBoard monitoring (optional)
+   - Monitor training progress
+   - Access at `http://localhost:6006`
+   - Visualize metrics and GPU usage
+
+4. **jupyter**: Jupyter Lab (optional)
+   - Interactive analysis and development
+   - Access at `http://localhost:8888`
+   - Full access to stockpatternannotator package
+
+### GPU Support
+
+#### Requirements
+
+1. **NVIDIA GPU** with CUDA support
+2. **NVIDIA drivers** installed on host
+3. **nvidia-docker** runtime installed
+
+#### Verify GPU Access
+
+```bash
+# Check GPU is available to Docker
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+
+# Check in stockpatternannotator container
+make gpu-check
+
+# Or manually
+docker-compose run --rm app-gpu python -c "from stockpatternannotator.rl_gpu_utils import print_gpu_info; print_gpu_info()"
+```
+
+#### GPU Performance
+
+With 16GB GPU, expect:
+- **8-12x faster** training than CPU
+- **batch_size=512**, **n_steps=8192** (auto-configured)
+- **Mixed precision** training enabled
+- 500K timesteps in ~5-10 minutes vs ~80 minutes on CPU
+
+### Development Workflow
+
+```bash
+# 1. Setup environment
+make setup
+nano .env  # Add your API keys
+
+# 2. Fetch data (first time)
+make example-polygon
+
+# 3. Validate patterns
+make example-validation
+
+# 4. Train RL agent (GPU recommended)
+make example-rl-gpu
+
+# 5. Monitor training
+make tensorboard
+# Visit http://localhost:6006
+
+# 6. Interactive analysis
+make up-dev
+# Visit http://localhost:8888
+```
+
+### Data Persistence
+
+All data is persisted in the `./data` directory:
+
+```bash
+data/
+├── models/
+│   └── pattern_trading_agent.zip     # Trained models
+├── results/
+│   └── backtest.csv                   # Backtest results
+├── databases/
+│   └── stockpatterns.db              # SQLite database
+└── tensorboard/                       # Training logs
+```
+
+These directories are mounted as volumes, so data persists across container restarts.
+
+### Troubleshooting
+
+**GPU not detected:**
+```bash
+# Check nvidia-docker installation
+docker run --rm --gpus all nvidia/cuda:11.8.0-base-ubuntu22.04 nvidia-smi
+
+# Check NVIDIA drivers
+nvidia-smi
+
+# Verify Docker can use GPU
+docker info | grep -i runtime
+```
+
+**Port conflicts:**
+```bash
+# Change ports in .env
+TENSORBOARD_PORT=6007
+JUPYTER_PORT=8889
+POSTGRES_PORT=5433
+```
+
+**Out of memory (GPU):**
+```bash
+# Reduce batch size in hyperparameters
+docker-compose run --rm app-gpu python -c "
+from stockpatternannotator import RLPipeline
+pipeline = RLPipeline()
+pipeline.load_data()
+pipeline.validate_patterns()
+pipeline.calculate_features()
+pipeline.prepare_environments()
+pipeline.train_agent(
+    total_timesteps=100000,
+    hyperparameters={'batch_size': 256, 'n_steps': 4096}
+)
+"
+```
+
+**Database connection issues:**
+```bash
+# Wait for PostgreSQL to be ready
+docker-compose up -d postgres
+sleep 5
+
+# Check logs
+docker-compose logs postgres
+
+# Test connection
+docker-compose exec postgres psql -U stockpattern -d stockpatterns -c "SELECT 1;"
+```
 
 ## Roadmap
 
