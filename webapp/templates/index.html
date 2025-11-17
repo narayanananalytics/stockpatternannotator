@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}New Training Job - Stock Pattern Annotator{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+    <div class="md:flex md:items-center md:justify-between">
+        <div class="min-w-0 flex-1">
+            <h2 class="text-2xl font-bold leading-7 text-gray-900 sm:truncate sm:text-3xl sm:tracking-tight">
+                Create New Training Job
+            </h2>
+            <p class="mt-2 text-sm text-gray-600">
+                Train a reinforcement learning agent to trade based on pattern probabilities
+            </p>
+        </div>
+    </div>
+
+    <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <!-- Job Creation Form -->
+        <div class="lg:col-span-2">
+            <form action="/jobs/create" method="POST" class="space-y-6 bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
+                <div class="px-4 py-6 sm:p-8">
+                    <div class="grid max-w-2xl grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
+                        <!-- API Key -->
+                        <div class="sm:col-span-6">
+                            <label for="polygon_api_key" class="block text-sm font-medium leading-6 text-gray-900">
+                                Polygon.io API Key <span class="text-red-500">*</span>
+                            </label>
+                            <div class="mt-2">
+                                <input type="password" name="polygon_api_key" id="polygon_api_key" required
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                    placeholder="Get free API key from polygon.io">
+                            </div>
+                        </div>
+
+                        <!-- Symbol -->
+                        <div class="sm:col-span-3">
+                            <label for="symbol" class="block text-sm font-medium leading-6 text-gray-900">
+                                Symbol <span class="text-red-500">*</span>
+                            </label>
+                            <div class="mt-2">
+                                <input type="text" name="symbol" id="symbol" required
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 uppercase"
+                                    placeholder="AAPL" value="AAPL">
+                            </div>
+                        </div>
+
+                        <!-- Timeframe -->
+                        <div class="sm:col-span-3">
+                            <label for="timeframe" class="block text-sm font-medium leading-6 text-gray-900">
+                                Timeframe <span class="text-red-500">*</span>
+                            </label>
+                            <div class="mt-2">
+                                <select name="timeframe" id="timeframe" required
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                                    <option value="1M">1 Minute</option>
+                                    <option value="3M">3 Minutes</option>
+                                    <option value="5M">5 Minutes</option>
+                                    <option value="15M">15 Minutes</option>
+                                    <option value="1H">1 Hour</option>
+                                    <option value="1D" selected>1 Day</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Start Date -->
+                        <div class="sm:col-span-3">
+                            <label for="start_date" class="block text-sm font-medium leading-6 text-gray-900">
+                                Start Date <span class="text-red-500">*</span>
+                            </label>
+                            <div class="mt-2">
+                                <input type="date" name="start_date" id="start_date" required
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                    value="2023-01-01">
+                            </div>
+                        </div>
+
+                        <!-- End Date -->
+                        <div class="sm:col-span-3">
+                            <label for="end_date" class="block text-sm font-medium leading-6 text-gray-900">
+                                End Date <span class="text-red-500">*</span>
+                            </label>
+                            <div class="mt-2">
+                                <input type="date" name="end_date" id="end_date" required
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6"
+                                    value="2024-01-01">
+                            </div>
+                        </div>
+
+                        <!-- Training Timesteps -->
+                        <div class="sm:col-span-3">
+                            <label for="total_timesteps" class="block text-sm font-medium leading-6 text-gray-900">
+                                Training Timesteps
+                            </label>
+                            <div class="mt-2">
+                                <select name="total_timesteps" id="total_timesteps"
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                                    <option value="50000">50,000 (Quick test ~5 min)</option>
+                                    <option value="100000" selected>100,000 (Standard ~10 min)</option>
+                                    <option value="250000">250,000 (Extended ~25 min)</option>
+                                    <option value="500000">500,000 (Full ~50 min)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Compute Type -->
+                        <div class="sm:col-span-3">
+                            <label for="compute_type" class="block text-sm font-medium leading-6 text-gray-900">
+                                Compute Type
+                            </label>
+                            <div class="mt-2">
+                                <select name="compute_type" id="compute_type"
+                                    class="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6">
+                                    <option value="cpu" selected>CPU (Slower, cheaper)</option>
+                                    <option value="gpu" disabled>GPU (Faster, premium) - Coming soon</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Advanced Options -->
+                        <div class="sm:col-span-6">
+                            <details class="group">
+                                <summary class="flex cursor-pointer items-center text-sm font-medium text-gray-900">
+                                    <span>Advanced Options</span>
+                                    <svg class="ml-2 h-5 w-5 transition group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                                    </svg>
+                                </summary>
+
+                                <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label for="forecast_horizon" class="block text-sm font-medium text-gray-700">Forecast Horizon (candles)</label>
+                                        <input type="number" name="forecast_horizon" id="forecast_horizon" value="5" min="1" max="50"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    </div>
+
+                                    <div>
+                                        <label for="initial_balance" class="block text-sm font-medium text-gray-700">Initial Balance ($)</label>
+                                        <input type="number" name="initial_balance" id="initial_balance" value="10000" min="1000" step="1000"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    </div>
+
+                                    <div>
+                                        <label for="transaction_cost" class="block text-sm font-medium text-gray-700">Transaction Cost (%)</label>
+                                        <input type="number" name="transaction_cost" id="transaction_cost" value="0.1" min="0" max="10" step="0.01"
+                                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    </div>
+
+                                    <div class="flex items-center">
+                                        <input type="checkbox" name="allow_short" id="allow_short" value="true"
+                                            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-600">
+                                        <label for="allow_short" class="ml-2 block text-sm text-gray-900">Allow Short Selling</label>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-x-6 border-t border-gray-900/10 px-4 py-4 sm:px-8">
+                    <button type="reset" class="text-sm font-semibold leading-6 text-gray-900">Reset</button>
+                    <button type="submit"
+                        class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                        Start Training
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Recent Jobs -->
+        <div>
+            <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
+                <div class="px-4 py-5 sm:p-6">
+                    <h3 class="text-base font-semibold leading-6 text-gray-900">Recent Jobs</h3>
+                    <div class="mt-4">
+                        {% if recent_jobs %}
+                            <ul role="list" class="divide-y divide-gray-200">
+                                {% for job in recent_jobs %}
+                                <li class="py-3">
+                                    <a href="/jobs/{{ job.job_id }}" class="block hover:bg-gray-50 rounded">
+                                        <div class="flex items-center justify-between">
+                                            <div class="min-w-0 flex-1">
+                                                <p class="text-sm font-medium text-gray-900 truncate">{{ job.symbol }}</p>
+                                                <p class="text-xs text-gray-500">{{ job.timeframe }} · {{ job.created_at.strftime('%b %d, %Y') }}</p>
+                                            </div>
+                                            <div class="ml-2 flex-shrink-0">
+                                                <span class="status-badge status-{{ job.status.value }}">
+                                                    {{ job.status.value }}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            <div class="mt-4">
+                                <a href="/jobs" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
+                                    View all jobs →
+                                </a>
+                            </div>
+                        {% else %}
+                            <p class="text-sm text-gray-500">No jobs yet. Create your first training job!</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

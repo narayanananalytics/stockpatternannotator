@@ -1,0 +1,154 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (optional - for production use)
+  postgres:
+    image: postgres:15-alpine
+    container_name: stockpattern-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-stockpattern}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stockpattern123}
+      POSTGRES_DB: ${POSTGRES_DB:-stockpatterns}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-stockpattern}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - stockpattern-network
+
+  # Stock Pattern Annotator - CPU Version
+  app-cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stockpattern-app-cpu
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-stockpattern}:${POSTGRES_PASSWORD:-stockpattern123}@postgres:5432/${POSTGRES_DB:-stockpatterns}
+      # Or use SQLite (default)
+      # - DATABASE_URL=sqlite:////data/databases/stockpatterns.db
+
+      # Polygon.io API (if using)
+      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+
+      # RL Training configuration
+      - DEVICE=cpu
+    volumes:
+      # Persist models, results, and databases
+      - ./data/models:/data/models
+      - ./data/results:/data/results
+      - ./data/databases:/data/databases
+      - ./data/tensorboard:/data/tensorboard
+      - ./examples:/app/examples
+      # Mount local code for development (comment out for production)
+      - ./stockpatternannotator:/app/stockpatternannotator
+    working_dir: /app
+    command: python examples/rl_trading_example.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - stockpattern-network
+    profiles:
+      - cpu
+
+  # Stock Pattern Annotator - GPU Version
+  app-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CUDA_VERSION: "11.8.0"
+    container_name: stockpattern-app-gpu
+    environment:
+      # Database configuration
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-stockpattern}:${POSTGRES_PASSWORD:-stockpattern123}@postgres:5432/${POSTGRES_DB:-stockpatterns}
+      # Or use SQLite (default)
+      # - DATABASE_URL=sqlite:////data/databases/stockpatterns.db
+
+      # Polygon.io API (if using)
+      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+
+      # RL Training configuration
+      - DEVICE=cuda
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      # Persist models, results, and databases
+      - ./data/models:/data/models
+      - ./data/results:/data/results
+      - ./data/databases:/data/databases
+      - ./data/tensorboard:/data/tensorboard
+      - ./examples:/app/examples
+      # Mount local code for development (comment out for production)
+      - ./stockpatternannotator:/app/stockpatternannotator
+    working_dir: /app
+    command: python examples/rl_trading_example.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - stockpattern-network
+    profiles:
+      - gpu
+
+  # TensorBoard for monitoring training
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    container_name: stockpattern-tensorboard
+    command: tensorboard --logdir=/data/tensorboard --host=0.0.0.0 --port=6006
+    ports:
+      - "${TENSORBOARD_PORT:-6006}:6006"
+    volumes:
+      - ./data/tensorboard:/data/tensorboard
+    networks:
+      - stockpattern-network
+    profiles:
+      - monitoring
+
+  # Jupyter Notebook for interactive analysis (optional)
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stockpattern-jupyter
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-stockpattern}:${POSTGRES_PASSWORD:-stockpattern123}@postgres:5432/${POSTGRES_DB:-stockpatterns}
+      - JUPYTER_ENABLE_LAB=yes
+    command: >
+      bash -c "pip install jupyterlab &&
+               jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+               --NotebookApp.token='' --NotebookApp.password=''"
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    volumes:
+      - ./data:/data
+      - ./examples:/app/examples
+      - ./notebooks:/app/notebooks
+      - ./stockpatternannotator:/app/stockpatternannotator
+    depends_on:
+      - postgres
+    networks:
+      - stockpattern-network
+    profiles:
+      - development
+
+networks:
+  stockpattern-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
