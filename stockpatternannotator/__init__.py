@@ -12,7 +12,17 @@ from .pipeline import DataPipeline
 from .config import Config, load_config, setup_environment
 from .validation import PatternValidator
 
-__version__ = "0.3.0"
+# RL components (optional dependencies)
+try:
+    from .rl_environment import PatternTradingEnv
+    from .rl_features import FeatureEngineer
+    from .rl_agent import RLTradingAgent, create_training_agent
+    from .rl_pipeline import RLPipeline
+    RL_AVAILABLE = True
+except ImportError:
+    RL_AVAILABLE = False
+
+__version__ = "0.4.0"
 __all__ = [
     "PatternAnnotator",
     "PatternConfig",
@@ -28,3 +38,13 @@ __all__ = [
     "setup_environment",
     "PatternValidator"
 ]
+
+# Add RL components to __all__ if available
+if RL_AVAILABLE:
+    __all__.extend([
+        "PatternTradingEnv",
+        "FeatureEngineer",
+        "RLTradingAgent",
+        "create_training_agent",
+        "RLPipeline"
+    ])

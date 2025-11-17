@@ -593,3 +593,225 @@ If you use this tool in your research, please cite:
 Stock Pattern Annotator (2024)
 GitHub: https://github.com/narayanananalytics/stockpatternannotator
 ```
+
+## Reinforcement Learning Trading (NEW in v0.4.0)
+
+Train RL agents to make trading decisions using pattern probabilities and technical indicators as signals.
+
+### Features
+
+- **Pattern-Based RL**: Use validated pattern probabilities as trading signals
+- **Technical Integration**: Combine patterns with RSI, MACD, Bollinger Bands, and more
+- **Custom Reward Function**: Optimized for profitability with penalties for excessive trading and holding
+- **PPO Algorithm**: State-of-the-art reinforcement learning (Proximal Policy Optimization)
+- **Backtesting**: Detailed trade-by-trade analysis
+- **Hyperparameter Tuning**: Built-in grid search and optimization
+
+### Quick Start
+
+```python
+from stockpatternannotator import RLPipeline
+
+# Create RL pipeline
+pipeline = RLPipeline(
+    database_url='sqlite:///stockpatterns.db',
+    forecast_horizon=5,  # Use 5-candle forecast
+    test_size=0.2
+)
+
+# Run complete workflow
+results = pipeline.run_full_pipeline(
+    symbol='AAPL',
+    timeframe='1D',
+    total_timesteps=100000  # Training steps
+)
+
+# View results
+print(f"Test Return: {results['evaluation']['mean_return']:.2%}")
+print(f"Win Rate: {results['evaluation']['mean_win_rate']:.2%}")
+```
+
+### Environment Configuration
+
+```python
+env_config = {
+    'initial_balance': 10000,
+    'transaction_cost': 0.001,      # 0.1% per trade
+    'max_position_size': 1.0,       # 100% of balance
+    'max_drawdown': 0.2,            # 20% max drawdown
+    'holding_penalty_weight': 0.001,
+    'pattern_bonus_weight': 0.1,
+    'pattern_prob_threshold': 0.55, # Bonus above 55% prob
+    'max_holding_period': 20,
+    'allow_short': True,
+    'signal_weights': {
+        'pattern_prob': 0.4,  # Hyperparameter
+        'technical': 0.3,
+        'momentum': 0.3
+    }
+}
+```
+
+### State Space
+
+The RL agent observes:
+- **Pattern Probabilities**: Bullish/bearish probabilities from validated patterns
+- **Technical Indicators**: RSI, MACD, Bollinger Bands, SMA, EMA, ATR, Stochastic, etc.
+- **Trading State**: Current position, P&L, max P&L achieved, holding period
+- **Pattern Confidence**: Confidence scores from pattern detection
+
+### Action Space
+
+- **0**: Hold current position
+- **1**: Buy (go long or close short)
+- **2**: Sell (go short or close long)
+
+### Reward Function
+
+```
+reward = profit/loss 
+         - transaction_costs
+         - holding_penalty (if holding > max_period)
+         + pattern_bonus (if following high-probability patterns)
+         - drawdown_penalty (if exceeding max drawdown)
+```
+
+### Training Example
+
+```python
+# Load data and prepare
+pipeline.load_data(symbol='AAPL', timeframe='1D')
+pipeline.validate_patterns()
+pipeline.calculate_features()
+
+# Prepare environments
+train_env, test_env = pipeline.prepare_environments(env_config)
+
+# Train agent
+agent = pipeline.train_agent(
+    total_timesteps=100000,
+    hyperparameters={
+        'learning_rate': 3e-4,
+        'n_steps': 2048,
+        'batch_size': 64,
+        'gamma': 0.99
+    }
+)
+
+# Evaluate
+results = pipeline.evaluate_agent(n_episodes=10)
+
+# Backtest
+backtest_df = pipeline.backtest()
+```
+
+### Hyperparameter Tuning
+
+```python
+from stockpatternannotator import hyperparameter_search
+
+param_grid = {
+    'learning_rate': [1e-4, 3e-4, 1e-3],
+    'n_steps': [1024, 2048, 4096],
+    'ent_coef': [0.0, 0.01, 0.05]
+}
+
+best = hyperparameter_search(
+    env_train=train_env,
+    env_val=test_env,
+    param_grid=param_grid,
+    n_trials=10
+)
+
+print(f"Best params: {best['best_params']}")
+print(f"Best score: {best['best_score']}")
+```
+
+### Installation
+
+```bash
+# Install RL dependencies
+pip install gymnasium stable-baselines3 torch tensorboard
+
+# Or install all at once
+pip install -r requirements.txt
+```
+
+### Requirements
+
+- Pattern-validated data in database
+- Minimum 1 year of historical data recommended
+- GPU recommended for faster training (optional)
+
+### Monitoring Training
+
+```bash
+# View training progress in TensorBoard
+tensorboard --logdir=./rl_tensorboard
+```
+
+Then open http://localhost:6006 to see:
+- Episode returns over time
+- Policy loss
+- Value function loss
+- Entropy (exploration)
+
+### Example Output
+
+```
+Test Set Evaluation (10 episodes):
+  Mean Return: 12.34% ± 3.45%
+  Mean Trades: 25.3
+  Mean Win Rate: 58.5%
+  Best Return: 18.9%
+  Worst Return: 7.2%
+
+Pattern Probabilities Used:
+  Pattern: HAMMER - Win Rate: 68.8% (5-candle)
+  Pattern: DOJI - Win Rate: 62.2% (5-candle)
+  Pattern: ENGULFING - Win Rate: 71.9% (5-candle)
+```
+
+### Advanced Usage
+
+```python
+# Custom feature engineering
+from stockpatternannotator import FeatureEngineer
+
+engineer = FeatureEngineer()
+indicators = engineer.calculate_all_features(
+    ohlc_data,
+    indicators=['rsi', 'macd', 'bollinger', 'atr']
+)
+
+# Weighted signals
+signals = engineer.calculate_weighted_signal(
+    pattern_probs,
+    tech_indicators,
+    weights={'pattern_prob': 0.5, 'technical': 0.3, 'momentum': 0.2}
+)
+```
+
+### Performance Tips
+
+1. **Data**: More data = better results (1+ years recommended)
+2. **Training**: Start with 50k-100k timesteps, increase if needed
+3. **Hyperparameters**: Use grid search to find optimal settings
+4. **Patterns**: Focus on high win-rate patterns (>60%)
+5. **Validation**: Always use separate test set for evaluation
+6. **Monitoring**: Watch for overfitting in TensorBoard
+
+### Limitations
+
+- Requires significant computational resources for training
+- Performance depends on pattern quality and historical data
+- Past performance does not guarantee future results
+- Consider transaction costs and slippage in live trading
+
+### Future Work
+
+- Multi-asset portfolio optimization
+- Risk parity position sizing
+- Online learning (continual training)
+- Integration with live brokers
+- Ensemble methods (multiple agents)
