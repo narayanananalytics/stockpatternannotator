@@ -21,6 +21,12 @@ except ImportError:
     warnings.warn("stable-baselines3 not available. Install it to use RL features.")
 
 from .rl_environment import PatternTradingEnv
+from .rl_gpu_utils import (
+    check_gpu_availability,
+    get_gpu_optimized_config,
+    enable_gpu_optimizations,
+    print_training_estimate
+)
 
 
 class TradingCallback(BaseCallback):
@@ -322,18 +328,25 @@ class RLTradingAgent:
 
 def create_training_agent(
     env: PatternTradingEnv,
-    hyperparameters: Optional[Dict] = None
+    hyperparameters: Optional[Dict] = None,
+    use_gpu_optimization: bool = True,
+    verbose: int = 1
 ) -> RLTradingAgent:
     """
     Create a trading agent with default or custom hyperparameters.
 
+    Automatically detects GPU and optimizes hyperparameters for available hardware.
+
     Args:
         env: Trading environment
         hyperparameters: Optional hyperparameters to override defaults
+        use_gpu_optimization: Whether to use GPU-optimized config (default: True)
+        verbose: Verbosity level
 
     Returns:
         RLTradingAgent instance
     """
+    # Start with base defaults
     default_params = {
         'learning_rate': 3e-4,
         'n_steps': 2048,
@@ -346,9 +359,39 @@ def create_training_agent(
         'vf_coef': 0.5,
         'max_grad_norm': 0.5,
         'use_sde': False,
-        'device': 'auto'
+        'device': 'auto',
+        'verbose': verbose
     }
 
+    # Check for GPU and apply optimizations
+    if use_gpu_optimization:
+        gpu_info = check_gpu_availability()
+
+        if gpu_info['cuda_available']:
+            # Get GPU-optimized config
+            gpu_config = get_gpu_optimized_config()
+
+            # Merge GPU-optimized params with defaults
+            default_params['device'] = gpu_config['device']
+            default_params['n_steps'] = gpu_config['n_steps']
+            default_params['batch_size'] = gpu_config['batch_size']
+            default_params['n_epochs'] = gpu_config['n_epochs']
+
+            if verbose:
+                print(f"✓ GPU detected: {gpu_info['device_name']}")
+                print(f"  Memory: {gpu_info['total_memory_gb']:.1f} GB")
+                print(f"  Optimized n_steps: {gpu_config['n_steps']}")
+                print(f"  Optimized batch_size: {gpu_config['batch_size']}")
+                print()
+
+            # Enable PyTorch GPU optimizations
+            enable_gpu_optimizations()
+        else:
+            if verbose:
+                print("⚠ No GPU detected, using CPU configuration")
+                print()
+
+    # Override with user-provided hyperparameters
     if hyperparameters:
         default_params.update(hyperparameters)
 

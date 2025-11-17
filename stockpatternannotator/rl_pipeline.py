@@ -16,6 +16,7 @@ from .validation import PatternValidator
 from .rl_features import FeatureEngineer
 from .rl_environment import PatternTradingEnv
 from .rl_agent import RLTradingAgent, create_training_agent
+from .rl_gpu_utils import print_gpu_info, print_training_estimate
 
 
 class RLPipeline:
@@ -38,7 +39,8 @@ class RLPipeline:
         database_url: str = 'sqlite:///stockpatterns.db',
         forecast_horizon: int = 5,
         test_size: float = 0.2,
-        random_state: int = 42
+        random_state: int = 42,
+        show_gpu_info: bool = True
     ):
         """
         Initialize RL pipeline.
@@ -48,6 +50,7 @@ class RLPipeline:
             forecast_horizon: Forecast horizon for pattern probabilities
             test_size: Fraction of data to use for testing
             random_state: Random seed for reproducibility
+            show_gpu_info: Whether to print GPU information on initialization
         """
         self.db = DatabaseManager(database_url)
         self.forecast_horizon = forecast_horizon
@@ -69,6 +72,10 @@ class RLPipeline:
         # Train/test split
         self.train_data = None
         self.test_data = None
+
+        # Show GPU information
+        if show_gpu_info:
+            print_gpu_info()
 
     def load_data(
         self,
@@ -284,10 +291,18 @@ class RLPipeline:
         if not hasattr(self, 'train_env'):
             raise ValueError("Must call prepare_environments() first")
 
-        print(f"\nTraining RL agent for {total_timesteps} timesteps...")
+        print(f"\nTraining RL agent for {total_timesteps:,} timesteps...")
 
-        # Create agent
+        # Create agent (with automatic GPU optimization)
         self.agent = create_training_agent(self.train_env, hyperparameters)
+
+        # Print training time estimate
+        config = {
+            'n_steps': self.agent.model.n_steps,
+            'batch_size': self.agent.model.batch_size,
+            'n_epochs': self.agent.model.n_epochs
+        }
+        print_training_estimate(total_timesteps, config)
 
         # Train
         self.agent.train(

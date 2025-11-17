@@ -18,6 +18,12 @@ try:
     from .rl_features import FeatureEngineer
     from .rl_agent import RLTradingAgent, create_training_agent
     from .rl_pipeline import RLPipeline
+    from .rl_gpu_utils import (
+        check_gpu_availability,
+        print_gpu_info,
+        get_gpu_optimized_config,
+        enable_gpu_optimizations
+    )
     RL_AVAILABLE = True
 except ImportError:
     RL_AVAILABLE = False
@@ -46,5 +52,9 @@ if RL_AVAILABLE:
         "FeatureEngineer",
         "RLTradingAgent",
         "create_training_agent",
-        "RLPipeline"
+        "RLPipeline",
+        "check_gpu_availability",
+        "print_gpu_info",
+        "get_gpu_optimized_config",
+        "enable_gpu_optimizations"
     ])

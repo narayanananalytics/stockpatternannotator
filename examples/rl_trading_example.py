@@ -8,9 +8,16 @@ This script demonstrates the complete RL trading workflow:
 4. Train RL agent using pattern probabilities as signals
 5. Evaluate and backtest
 
+GPU Acceleration:
+- Automatically detects and optimizes for available GPU
+- For 16GB GPU: Uses batch_size=512, n_steps=8192, mixed precision
+- For 8-16GB GPU: Uses batch_size=256, n_steps=4096
+- Falls back to CPU if no GPU detected
+
 Requirements:
 - Run polygon_pipeline_example.py first to populate database
 - Install RL dependencies: pip install gymnasium stable-baselines3 torch
+- For GPU: Install CUDA-enabled PyTorch (see pytorch.org)
 """
 
 import sys
@@ -48,6 +55,11 @@ def main():
         print("This will create the database with OHLC data and pattern annotations.")
         return
 
+    print("NOTE: GPU optimization is enabled by default.")
+    print("The pipeline will automatically detect your GPU and optimize hyperparameters.")
+    print("For your 16GB GPU, expect: batch_size=512, n_steps=8192, mixed precision")
+    print()
+
     # Configuration
     symbol = None  # None = use all symbols in database
     timeframe = '1D'  # Daily data
@@ -71,11 +83,13 @@ def main():
         }
     }
 
-    # Agent hyperparameters
+    # Agent hyperparameters (optional - GPU optimization happens automatically)
+    # Note: n_steps and batch_size will be auto-optimized for your GPU
+    # You can override them here if needed
     hyperparameters = {
         'learning_rate': 3e-4,
-        'n_steps': 2048,
-        'batch_size': 64,
+        # 'n_steps': 2048,       # Auto-optimized based on GPU memory
+        # 'batch_size': 64,      # Auto-optimized based on GPU memory
         'n_epochs': 10,
         'gamma': 0.99,           # Discount factor
         'gae_lambda': 0.95,
@@ -100,11 +114,13 @@ def main():
     print("=" * 70)
     print()
 
+    # Pipeline will automatically detect GPU and show info
     pipeline = RLPipeline(
         database_url='sqlite:///stockpatterns_example.db',
         forecast_horizon=5,  # Use 5-candle forecast probabilities
         test_size=0.2,       # 20% for testing
-        random_state=42
+        random_state=42,
+        show_gpu_info=True   # Shows GPU detection and optimization info
     )
 
     try:
